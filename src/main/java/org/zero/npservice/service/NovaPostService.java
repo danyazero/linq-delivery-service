@@ -1,9 +1,5 @@
 package org.zero.npservice.service;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 import org.zero.npservice.entity.Delivery;
 import org.zero.npservice.exception.RequestException;
 import org.zero.npservice.mapper.AddressMapper;
+import org.zero.npservice.mapper.DeliveryMapper;
 import org.zero.npservice.mapper.ParcelMapper;
 import org.zero.npservice.model.delivery.ContactPerson;
 import org.zero.npservice.model.delivery.DeliveryProvider;
@@ -36,7 +33,6 @@ import org.zero.npservice.model.delivery.novaPost.NPContactResponse;
 import org.zero.npservice.model.delivery.novaPost.NPDeliveryStatus;
 import org.zero.npservice.model.delivery.novaPost.NPDocumentRemoveRequest;
 import org.zero.npservice.model.delivery.novaPost.NPDocumentRequest;
-import org.zero.npservice.model.delivery.novaPost.NPDocumentResponse;
 import org.zero.npservice.model.delivery.novaPost.NPMethod;
 import org.zero.npservice.model.delivery.novaPost.NPModel;
 import org.zero.npservice.model.delivery.novaPost.NPObject;
@@ -49,11 +45,8 @@ import org.zero.npservice.model.delivery.novaPost.NPWarehouseResponse;
 import org.zero.npservice.model.delivery.novaPost.NPWarehouseType;
 import org.zero.npservice.repository.DeliveryRepository;
 import org.zero.npservice.repository.NpWarehouseRepository;
-import org.zero.npservice.utils.Deserializer;
 import org.zero.npservice.utils.DocumentProvider;
-import org.zero.npservice.utils.Serializer;
 import org.zero.npservice.utils.UUIDProvider;
-import org.zero.npservice.utils.UnicodeConverter;
 import org.zero.npservice.utils.UpdateWarehouse;
 
 @Component
@@ -85,8 +78,7 @@ public class NovaPostService implements IDelivery<NPAddress> {
       String senderCityRef, String recipientCityRef, Parcel parcelDetails) {
     var requestBody = getPriceRequestBody(senderCityRef, recipientCityRef, parcelDetails);
     var response = sendPostRequest(requestBody, NPCalculateResponse.class);
-    if (!response.getSuccess())
-      throw new RequestException("Exception price calculating.");
+    if (!response.getSuccess()) throw new RequestException("Exception price calculating.");
     return Double.parseDouble(response.getData().getFirst().getCost());
   }
 
@@ -95,20 +87,17 @@ public class NovaPostService implements IDelivery<NPAddress> {
   public String createContactPerson(ContactPerson contactPerson) {
     setCounterparty(contactPerson);
 
-    var requestBody = new NPObject<>(apiKey, NPModel.ContactPersonGeneral, NPMethod.save, contactPerson);
+    var requestBody =
+        new NPObject<>(apiKey, NPModel.ContactPersonGeneral, NPMethod.save, contactPerson);
     var response = sendPostRequest(requestBody, NPContactResponse.class);
-    return response
-        .getData()
-        .getLast()
-        .getRef();
+    return response.getData().getLast().getRef();
   }
 
   @Override
   public NPAddress createAddress(String addressRef) {
     var warehouseId = uuidProvider.get(addressRef);
     var warehouse = warehouseRepository.findById(warehouseId);
-    if (warehouse.isEmpty())
-      throw new RequestException("Warehouse not found.");
+    if (warehouse.isEmpty()) throw new RequestException("Warehouse not found.");
 
     return AddressMapper.map(warehouse.get());
   }
@@ -121,12 +110,13 @@ public class NovaPostService implements IDelivery<NPAddress> {
       NPAddress addressRecipient,
       Parcel parcelDetails) {
 
-    var requestBody = getDocumentRequestBody(
-        contactSender, addressSender, contactRecipient, addressRecipient, parcelDetails);
-    var response = sendPostRequest(requestBody, NPDocumentResponse.class);
-    if (!response.getSuccess())
-      throw new RequestException("Error creating delivery document");
-
+    var requestBody =
+        getDocumentRequestBody(
+            contactSender, addressSender, contactRecipient, addressRecipient, parcelDetails);
+    // var response = sendPostRequest(requestBody, NPDocumentResponse.class);
+    // if (!response.getSuccess())
+    // throw new RequestException("Error creating delivery document");
+    System.out.println(requestBody.toString());
     return new Document(95.0, "date", "documentNumber");
 
     // var cost = response.getData().getFirst().getCostOnSite();
@@ -141,8 +131,7 @@ public class NovaPostService implements IDelivery<NPAddress> {
 
     var requestBody = getRemoveDocumentRequestBody(orderId);
     var response = sendPostRequest(requestBody, NPResponse.class);
-    if (!response.getSuccess())
-      throw new RequestException("Error removing delivery document");
+    if (!response.getSuccess()) throw new RequestException("Error removing delivery document");
   }
 
   @Override
@@ -156,12 +145,12 @@ public class NovaPostService implements IDelivery<NPAddress> {
   // @Scheduled(fixedDelay = 10000)
   private void updateDeliveryStatus() {
     System.out.println("Started delivery status update");
-    var deliveryList = deliveryRepository.findAllByStatusIsNotIn(NPDeliveryStatus.getFinishedStatuses());
-    if (deliveryList.isEmpty())
-      return;
+    var deliveryList =
+        deliveryRepository.findAllByStatusIsNotIn(NPDeliveryStatus.getFinishedStatuses());
+    if (deliveryList.isEmpty()) return;
 
-    List<String> deliveryDocumentNumberList = deliveryList.stream()
-        .map(element -> element.getDocument().getDocumentNumber()).toList();
+    List<String> deliveryDocumentNumberList =
+        deliveryList.stream().map(element -> element.getDocument().getDocumentNumber()).toList();
     var data = getCurrentDeliveryStatus(deliveryDocumentNumberList);
 
     List<Delivery> updated = new ArrayList<>();
@@ -170,8 +159,8 @@ public class NovaPostService implements IDelivery<NPAddress> {
       var previousDeliveryState = getPreviousDeliveryState(deliveryList, currentDelivery);
 
       if (isStatusChange(resultStatus, previousDeliveryState)) {
-        var currentDeliveryStatus = NPDeliveryStatus.findEnumById(Integer.parseInt(resultStatus.getStatusCode()))
-            .name();
+        var currentDeliveryStatus =
+            NPDeliveryStatus.findEnumById(Integer.parseInt(resultStatus.getStatusCode())).name();
         System.out.println(currentDeliveryStatus);
         previousDeliveryState.get().setStatus(currentDeliveryStatus);
         updated.add(previousDeliveryState.get());
@@ -191,25 +180,27 @@ public class NovaPostService implements IDelivery<NPAddress> {
   public void updateWarehouseList() {
 
     CompletableFuture.supplyAsync(
-        () -> {
-          var requestBodyWarehouse = new NPObject<Object>(
-              apiKey,
-              NPModel.AddressGeneral,
-              NPMethod.getWarehouses,
-              new NPWarehouseRequest(NPWarehouseType.WAREHOUSE.getRef()));
-          return sendPostRequest(requestBodyWarehouse, NPWarehouseResponse.class).getData();
-        })
+            () -> {
+              var requestBodyWarehouse =
+                  new NPObject<Object>(
+                      apiKey,
+                      NPModel.AddressGeneral,
+                      NPMethod.getWarehouses,
+                      new NPWarehouseRequest(NPWarehouseType.WAREHOUSE.getRef()));
+              return sendPostRequest(requestBodyWarehouse, NPWarehouseResponse.class).getData();
+            })
         .thenAcceptAsync(updateWarehouse);
 
     CompletableFuture.supplyAsync(
-        () -> {
-          var requestBodyCargo = new NPObject<Object>(
-              apiKey,
-              NPModel.AddressGeneral,
-              NPMethod.getWarehouses,
-              new NPWarehouseRequest(NPWarehouseType.CARGO.getRef()));
-          return sendPostRequest(requestBodyCargo, NPWarehouseResponse.class).getData();
-        })
+            () -> {
+              var requestBodyCargo =
+                  new NPObject<Object>(
+                      apiKey,
+                      NPModel.AddressGeneral,
+                      NPMethod.getWarehouses,
+                      new NPWarehouseRequest(NPWarehouseType.CARGO.getRef()));
+              return sendPostRequest(requestBodyCargo, NPWarehouseResponse.class).getData();
+            })
         .thenAcceptAsync(updateWarehouse);
 
     System.out.println("Warehouse updated");
@@ -222,42 +213,24 @@ public class NovaPostService implements IDelivery<NPAddress> {
 
     HttpEntity<NPObject<T>> entity = new HttpEntity<>(requestBody, headers);
 
-    ResponseEntity<U> response = new RestTemplate().exchange(apiURI, HttpMethod.POST, entity, clazz);
+    ResponseEntity<U> response =
+        new RestTemplate().exchange(apiURI, HttpMethod.POST, entity, clazz);
 
     if (response.getStatusCode() != HttpStatusCode.valueOf(200))
       throw new RequestException("Error delivery request.");
     return response.getBody();
   }
 
-  // @SneakyThrows
-  // private <T> HttpResponse<String> sendPostRequest(NPObject<T> requestBody) {
-  // var uri = URI.create(apiURI);
-  // String serializedContactPerson = Serializer.apply(requestBody);
-  // System.out.println(serializedContactPerson);
-  // HttpRequest request =
-  // HttpRequest.newBuilder()
-  // .uri(uri)
-  // .POST(HttpRequest.BodyPublishers.ofString(serializedContactPerson))
-  // .build();
-  // return client.send(request, HttpResponse.BodyHandlers.ofString());
-  // }
-  //
   private NPObject<NPCalculate> getPriceRequestBody(
       String senderCityRef, String recipientCityRef, Parcel parcelDetails) {
-    var requestData = new NPCalculate(
-        senderCityRef,
-        recipientCityRef,
-        String.valueOf(parcelDetails.getWeight()),
-        String.valueOf(parcelDetails.getCost()));
+    var requestData = DeliveryMapper.map(parcelDetails, senderCityRef, recipientCityRef);
     return new NPObject<>(
         apiKey, NPModel.InternetDocumentGeneral, NPMethod.getDocumentPrice, requestData);
   }
 
   private void setCounterparty(ContactPerson contactPerson) {
-    if (contactPerson.isSender())
-      contactPerson.setCounterpartyRef(senderCounterpartyRef);
-    else
-      contactPerson.setCounterpartyRef(recipientCounterpartyRef);
+    if (contactPerson.isSender()) contactPerson.setCounterpartyRef(senderCounterpartyRef);
+    else contactPerson.setCounterpartyRef(recipientCounterpartyRef);
   }
 
   private NPObject<NPDocumentRequest> getDocumentRequestBody(
@@ -271,16 +244,16 @@ public class NovaPostService implements IDelivery<NPAddress> {
     String recipientContactRef = this.createContactPerson(contactRecipient);
     List<NPSeat> seats = new ArrayList<>(List.of(ParcelMapper.map(parcelDetails)));
 
-    NPDocumentRequest document = documentProvider
-        .addParcelDetails(parcelDetails)
-        .addSenderAddress(addressSender)
-        .addRecipientAddress(addressRecipient)
-        .addCounterpartyRefs(senderCounterpartyRef, recipientCounterpartyRef)
-        .addContactRefs(senderContactRef, recipientContactRef)
-        .addContactPersonPhones(contactSender, contactRecipient)
-        .addSeats(seats)
-        .addDays(deliveryDays)
-        .build();
+    NPDocumentRequest document =
+        documentProvider
+            .addParcelDetails(parcelDetails)
+            .addAddresses(addressSender, addressRecipient)
+            .addCounterpartyRefs(senderCounterpartyRef, recipientCounterpartyRef)
+            .addContactRefs(senderContactRef, recipientContactRef)
+            .addContactPersonPhones(contactSender, contactRecipient)
+            .addDays(deliveryDays)
+            .addSeats(seats)
+            .build();
 
     return new NPObject<>(apiKey, NPModel.InternetDocument, NPMethod.save, document);
   }
@@ -292,8 +265,9 @@ public class NovaPostService implements IDelivery<NPAddress> {
 
   private NPObject<NPStatusRequest> getDeliveryStatusRequestBody(
       List<String> deliveryDocumentNumber) {
-    var statusRequestBody = new NPStatusRequest(
-        deliveryDocumentNumber.stream().map(NPStatusRequest.NPStatus::new).toList());
+    var statusRequestBody =
+        new NPStatusRequest(
+            deliveryDocumentNumber.stream().map(NPStatusRequest.NPStatus::new).toList());
     return new NPObject<>(
         apiKey, NPModel.TrackingDocumentGeneral, NPMethod.getStatusDocuments, statusRequestBody);
   }

@@ -1,10 +1,10 @@
 package org.zero.npservice.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.zero.npservice.exception.RequestException;
 import org.zero.npservice.mapper.AddressMapper;
 import org.zero.npservice.mapper.ContactPersonMapper;
+import org.zero.npservice.mapper.DeliveryMapper;
 import org.zero.npservice.mapper.ParcelMapper;
 import org.zero.npservice.model.Delivery;
 import org.zero.npservice.model.UserData;
@@ -17,6 +17,8 @@ import org.zero.npservice.utils.UUIDProvider;
 import org.zero.npservice.utils.UserProvider;
 import org.zero.npservice.utils.WarehouseCoupleHandler;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
 @RequiredArgsConstructor
 public class DeliveryService {
@@ -28,25 +30,18 @@ public class DeliveryService {
   private final WarehouseCoupleHandler warehouseCoupleHandler;
 
   public void defineDocument(Order order) {
-    var delivery = new org.zero.npservice.entity.Delivery();
-    delivery.setOrderId(order.getOrderId());
-    delivery.setSenderUserId(order.getSellerUserId());
-    delivery.setRecipientUserId(order.getRecipientUserId());
+    var senderAddress = novaPostService.createAddress(order.getSellerWarehouseId());
+    var recipientAddress = novaPostService.createAddress(order.getRecipientWarehouseId());
+    var parcel = parcelRepository.getReferenceById(order.getParcelType());
+    var delivery = DeliveryMapper.map(order, parcel, senderAddress, recipientAddress);
 
-    this.setRecipientDeliveryData(order, delivery);
-    this.setSenderDeliveryData(order, delivery);
-
-    delivery.setParcelTypeId(parcelRepository.getReferenceById(order.getParcelType()));
-    delivery.setDescription(order.getDeliveryDescription());
-    delivery.setCartPrice(order.getCartPrice());
-
-    delivery.setStatus("DEFINED");
     deliveryRepository.save(delivery);
   }
 
   public void createDocument(String orderId) {
     var delivery = deliveryRepository.findFirstByOrderId(orderId);
-    if (delivery.isEmpty()) throw new RequestException("Delivery not found");
+    if (delivery.isEmpty())
+      throw new RequestException("Delivery not found");
 
     UserData senderUserData = userProvider.getUserData(delivery.get().getSenderUserId());
     UserData recipientUserData = userProvider.getUserData(delivery.get().getRecipientUserId());
@@ -58,9 +53,8 @@ public class DeliveryService {
     var recipientAddress = AddressMapper.mapAsRecipient(delivery.get());
 
     org.zero.npservice.entity.Parcel parcelDetails = delivery.get().getParcelTypeId();
-    Parcel parcel =
-        ParcelMapper.map(
-            parcelDetails, delivery.get().getDescription(), delivery.get().getCartPrice());
+    Parcel parcel = ParcelMapper.map(
+        parcelDetails, delivery.get());
 
     novaPostService.createDeliveryDocument(
         senderContactPerson, senderAddress, recipientContactPerson, recipientAddress, parcel);
@@ -68,7 +62,8 @@ public class DeliveryService {
 
   public Double calculatePrice(Delivery delivery) {
     var parcelDetails = parcelRepository.findById(delivery.parcelType());
-    if (parcelDetails.isEmpty()) throw new RequestException("Parcel not found");
+    if (parcelDetails.isEmpty())
+      throw new RequestException("Parcel not found");
 
     var parcel = ParcelMapper.map(parcelDetails.get(), "test", delivery.price());
     var senderWarehouseId = uuidProvider.get(delivery.sender());

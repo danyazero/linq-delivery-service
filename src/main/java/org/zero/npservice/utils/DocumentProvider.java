@@ -16,6 +16,13 @@ import org.zero.npservice.model.delivery.novaPost.NPSeat;
 public class DocumentProvider {
   private NPDocumentRequest document;
 
+  public DocumentProvider addAddresses(NPAddress senderAddress, NPAddress recipientAddress) {
+    this.addSenderAddress(senderAddress);
+    this.addRecipientAddress(recipientAddress);
+
+    return this;
+  }
+
   public DocumentProvider addRecipientAddress(NPAddress address) {
     this.document.setRecipientWarehouseIndex(String.valueOf(address.warehouseNumber()));
     this.document.setSenderAddressRef(address.addressRef());
