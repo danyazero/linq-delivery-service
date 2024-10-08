@@ -12,14 +12,16 @@ import lombok.Setter;
 @Entity
 @Table(name = "document")
 public class Document {
-    @Id
-    @Column(name = "id", nullable = false)
-    private Integer id;
+  @Id
+  @Column(name = "id", nullable = false)
+  private Integer id;
 
-    @Column(name = "document_ref", nullable = false, length = Integer.MAX_VALUE)
-    private String documentRef;
+  @Column(name = "document_ref", nullable = false, length = Integer.MAX_VALUE)
+  private String documentRef;
 
-    @Column(name = "document_number", nullable = false, length = Integer.MAX_VALUE)
-    private String documentNumber;
+  @Column(name = "document_number", nullable = false, length = Integer.MAX_VALUE)
+  private String documentNumber;
 
+  @Column(name = "delivery_price", nullable = false)
+  private Double deliveryPrice;
 }

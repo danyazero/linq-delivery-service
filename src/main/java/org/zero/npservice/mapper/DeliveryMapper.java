@@ -8,6 +8,10 @@ import org.zero.npservice.model.kafka.data.Order;
 
 public class DeliveryMapper {
 
+  public static org.zero.npservice.model.kafka.data.Delivery map(Delivery delivery) {
+    return null;
+  }
+
   public static NPCalculate map(
       org.zero.npservice.model.delivery.Parcel parcelDetails,
       String senderCityRef,

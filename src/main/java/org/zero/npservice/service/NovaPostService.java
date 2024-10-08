@@ -40,6 +40,7 @@ import org.zero.npservice.model.delivery.novaPost.NPResponse;
 import org.zero.npservice.model.delivery.novaPost.NPSeat;
 import org.zero.npservice.model.delivery.novaPost.NPStatusRequest;
 import org.zero.npservice.model.delivery.novaPost.NPStatusResponse;
+import org.zero.npservice.model.delivery.novaPost.NPStatusResponse.NPStatusResult;
 import org.zero.npservice.model.delivery.novaPost.NPWarehouseRequest;
 import org.zero.npservice.model.delivery.novaPost.NPWarehouseResponse;
 import org.zero.npservice.model.delivery.novaPost.NPWarehouseType;
@@ -95,8 +96,8 @@ public class NovaPostService implements IDelivery<NPAddress> {
 
   @Override
   public NPAddress createAddress(String addressRef) {
-    var warehouseId = uuidProvider.get(addressRef);
-    var warehouse = warehouseRepository.findById(warehouseId);
+    // var warehouseId = uuidProvider.get(addressRef);
+    var warehouse = warehouseRepository.findFirstByAddressRef(addressRef);
     if (warehouse.isEmpty()) throw new RequestException("Warehouse not found.");
 
     return AddressMapper.map(warehouse.get());
@@ -117,7 +118,7 @@ public class NovaPostService implements IDelivery<NPAddress> {
     // if (!response.getSuccess())
     // throw new RequestException("Error creating delivery document");
     System.out.println(requestBody.toString());
-    return new Document(95.0, "date", "documentNumber");
+    return new Document(95.0, "date", "documentNumber", "");
 
     // var cost = response.getData().getFirst().getCostOnSite();
     // var date = response.getData().getFirst().getEstimatedDeliveryDate();
@@ -151,17 +152,19 @@ public class NovaPostService implements IDelivery<NPAddress> {
 
     List<String> deliveryDocumentNumberList =
         deliveryList.stream().map(element -> element.getDocument().getDocumentNumber()).toList();
-    var data = getCurrentDeliveryStatus(deliveryDocumentNumberList);
+    List<NPStatusResult> data = getCurrentDeliveryStatus(deliveryDocumentNumberList);
 
     List<Delivery> updated = new ArrayList<>();
     for (var resultStatus : data) {
-      var currentDelivery = resultStatus.getDeliveryDocument();
-      var previousDeliveryState = getPreviousDeliveryState(deliveryList, currentDelivery);
+      String currentDelivery = resultStatus.getDeliveryDocument();
+      Optional<Delivery> previousDeliveryState =
+          getPreviousDeliveryState(deliveryList, currentDelivery);
 
       if (isStatusChange(resultStatus, previousDeliveryState)) {
-        var currentDeliveryStatus =
+        String currentDeliveryStatus =
             NPDeliveryStatus.findEnumById(Integer.parseInt(resultStatus.getStatusCode())).name();
         System.out.println(currentDeliveryStatus);
+        // TODO: Send message to kafka topic
         previousDeliveryState.get().setStatus(currentDeliveryStatus);
         updated.add(previousDeliveryState.get());
       }

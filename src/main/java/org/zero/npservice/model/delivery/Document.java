@@ -1,8 +1,4 @@
 package org.zero.npservice.model.delivery;
 
 public record Document(
-        Double cost,
-        String deliveryDate,
-        String documentNumber
-) {
-}
+    Double cost, String deliveryDate, String documentNumber, String documentRef) {}
